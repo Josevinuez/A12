@@ -13,8 +13,9 @@ public class Game extends JFrame {
     private final JPanel originalControlPanel; // Original control panel
     private JPanel designPanel;// Panel for design mode
     private JButton backButton;// Back button for design mode
-    private CellState[][] grid;// 2D array representing the grid
-    private static final int DIM = 8; // Dimension of the grid (16x16) by default
+    private CellState[][] gridPlayer;
+    private CellState[][] gridOpponent;
+    private static int DIM = 10; // Dimension of the grid (16x16) by default
 
     public static void main(String[] args) {
         new Game();
@@ -84,7 +85,8 @@ public class Game extends JFrame {
         JButton randomLayoutButton = new JButton("Random Layout");
         randomLayoutButton.addActionListener(e -> {
             System.out.println("Random Layout button clicked");
-            generateRandomBoats();
+            generateNumberBoats(gridPlayer);
+            generateNumberBoats(gridOpponent);
         });
 
         designRandomPanel.add(designButton);
@@ -107,6 +109,7 @@ public class Game extends JFrame {
                 if (designMode) {
                     getContentPane().remove(boardContainer);
                     boardContainer = createBoardPanel(selectedDimension); // Create a new board with the selected dimension
+                    DIM=selectedDimension;
                     getContentPane().add(boardContainer, BorderLayout.CENTER);
                     pack();
                 }
@@ -235,21 +238,22 @@ public class Game extends JFrame {
     /**
      * Initializes the 2D grid for the game. Each cell in the grid can either be empty or contain part of a ship.
      * @param dimension the number of cells in one row or column of the grid
-     * @return a JPanel representing the initialized game grid
      */
-    private JPanel initializeGrid(int dimension) {
+    private void initializeGrid(int dimension) {
         // Calculate the total size of the grid, twice the dimension
         int boardSize = 2 * dimension;
-        // Initialize an empty 2D array 'grid' with dimensions as boardSize
-        grid = new CellState[boardSize][boardSize];
 
-        // Initialize the grid with empty cells
+        // Initialize an empty 2D array 'grid' with dimensions as boardSize
+        gridPlayer = new CellState[boardSize][boardSize];
+        gridOpponent = new CellState[boardSize][boardSize];
+
+        // Initialize the grids with empty cells
         for (int row = 0; row < boardSize; row++) {
             for (int col = 0; col < boardSize; col++) {
-                grid[row][col] = CellState.EMPTY;
+                gridPlayer[row][col] = CellState.EMPTY;
+                gridOpponent[row][col] = CellState.EMPTY;
             }
         }
-        return createGridBoard(boardSize);
     }
     /**
      * Creates the board panel, which displays the 2D game grid to the user.
@@ -259,10 +263,13 @@ public class Game extends JFrame {
     private JPanel createBoardPanel(int dimension) {
         int boardSize = 2 * dimension;
 
-        JPanel leftBoard = createGridBoard(boardSize);
-        JPanel rightBoard = createGridBoard(boardSize);
-        leftBoard.setPreferredSize(new Dimension(500, 500)); // Set a fixed size for the left board
-        rightBoard.setPreferredSize(new Dimension(500, 500)); // Set a fixed size for the right board
+        // Pass the player's grid to create the player's board
+        JPanel playerBoard = createGridBoard(boardSize, gridPlayer);
+        playerBoard.setPreferredSize(new Dimension(500, 500));
+
+        // Pass the opponent's grid to create the opponent's board
+        JPanel opponentBoard = createGridBoard(boardSize, gridOpponent);
+        opponentBoard.setPreferredSize(new Dimension(500, 500));
 
         JPanel boardContainer = new JPanel();
         boardContainer.setLayout(new GridBagLayout());
@@ -272,23 +279,22 @@ public class Game extends JFrame {
         constraints.gridy = 0;
         constraints.weightx = 1.0;
         constraints.weighty = 1.0;
-        constraints.fill = GridBagConstraints.BOTH; // Set the fill behavior of the component within its display area
+        constraints.fill = GridBagConstraints.BOTH;
 
-        boardContainer.add(leftBoard, constraints);// Add the left board to the board container
+        boardContainer.add(playerBoard, constraints);
 
-        // Update the X and y coordinate for the next component
         constraints.gridx = 1;
         constraints.gridy = 0;
 
-        JPanel controlPanel = createControlPanel(); // Create the control panel
-        boardContainer.add(controlPanel, constraints); // Add the control panel to the board container
+        JPanel controlPanel = createControlPanel();
+        boardContainer.add(controlPanel, constraints);
 
-        // Update the X and y coordinate for the next component
         constraints.gridx = 2;
         constraints.gridy = 0;
 
-        boardContainer.add(rightBoard, constraints);// Add the right board to the board container
+        boardContainer.add(opponentBoard, constraints);
         this.boardContainer = boardContainer;
+
         return boardContainer;
     }
 
@@ -297,14 +303,14 @@ public class Game extends JFrame {
      * @param boardSize the number of cells in one row or column of the grid
      * @return a JPanel representing the grid
      */
-    private JPanel createGridBoard(int boardSize) {
+    private JPanel createGridBoard(int boardSize, CellState[][] grid) {
         JPanel board = new JPanel();
         // Set the layout manager for the board panel
         board.setLayout(new GridLayout(boardSize, boardSize));
 
         for (int row = 0; row < boardSize; row++) {
             for (int col = 0; col < boardSize; col++) {
-                JPanel cell = createCell(row, col);// Create a cell panel for the current row and column
+                JPanel cell = createCell(row, col, grid);// Create a cell panel for the current row and column
                 board.add(cell); // Add the cell panel to the board panel
             }
         }
@@ -316,7 +322,7 @@ public class Game extends JFrame {
      * @param col the column number of the cell in the grid
      * @return a JPanel representing the cell
      */
-    private JPanel createCell(int row, int col) {
+    private JPanel createCell(int row, int col, CellState[][] grid) {
         JPanel cell = new JPanel();
         cell.setPreferredSize(new Dimension(CELL_SIZE, CELL_SIZE));// Set the preferred size of the cell
         cell.setBorder(BorderFactory.createLineBorder(Color.GRAY));// Set the border color of the cell
@@ -335,23 +341,26 @@ public class Game extends JFrame {
         });
         cell.setName("cell_" + (char) ('A' + row) + (char) ('A' + col));// Set a name for the cell panel
         return cell;
-    }
-    /**
-     * Generates a random layout of ships on the game grid.
+    }    /**
+     * Generates number of boats
      */
-    private void generateRandomBoats() {
-        for (int boatSize = 1; boatSize <= DIM; boatSize++) {
-            for (int j = 1; j <= DIM - boatSize + 1; j++) {
-                createRandomBoat(boatSize);// Create a random boat of the specified size
+    private void generateNumberBoats(CellState[][] grid) {
+        int totalBoats = 0; // Variable to store the total number of boats
+        for (int i = DIM; i > 0; i--) {
+            for (int j = 1; j <= DIM - i + 1; j++) {
+                createRandomBoat(i, grid);// Create a random boat of the specified size
+                totalBoats++; // Increment the total number of boats
             }
         }
-        updateBoard();// Update the game board after generating the random layout
+        System.out.println("Total number of boats: " + totalBoats);
+        updateBoard();
     }
+
     /**
      * Creates a random boat of a specified size on the game grid.
      * @param boatSize the size of the boat, which is the number of consecutive cells it occupies
      */
-    private void createRandomBoat(int boatSize) {
+    private void createRandomBoat(int boatSize, CellState[][] grid) {
         Random rand = new Random();
         int randRow, randCol;
         boolean validPosition = false;
@@ -408,7 +417,7 @@ public class Game extends JFrame {
         getContentPane().repaint(); // Repaint the content pane to reflect the changes
     }
     /**
-     * Enumeration for the possible states of a cell in the game grid. A cell can either be empty or contain part of a ship.
+     * Enum for the possible states of a cell in the game grid. A cell can either be empty or contain part of a ship.
      */
     private enum CellState {
         EMPTY, // Represents an empty cell
